@@ -1,0 +1,19 @@
+docker run --rm -ti --network custom_network --env NODE_TLS_REJECT_UNAUTHORIZED=0  elasticdump/elasticsearch-dump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/my-foo --output=https://elastic:elastic.1@es01:9200/my-foo2 --type=mapping
+
+docker run --rm -ti --network custom_network --env NODE_TLS_REJECT_UNAUTHORIZED=0  elasticdump/elasticsearch-dump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/my-foo --output=https://elastic:elastic.1@es01:9200/my-foo2 --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"range\`": {\`"alert_at_date\`": {\`"gte\`": \`"now-1d/d\`", \`"lte\`": \`"now/d\`"}}}}}}" --type=data
+
+docker run --rm -ti --network custom_network elasticdump/elasticsearch-dump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/my-foo --output=./es_data/my-foo.json --type=mapping
+
+
+{"query": {"bool":{"must": {"range": {"alert_at_date": {"gte": "now-7d/d", "lte": "now/d"}}}}}
+
+### server-to-flatfile
+
+elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./data/mapping.json --type=mapping
+
+elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./data/data.json --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"range\`": {\`"alert_at_date\`": {\`"gte\`": \`"now-1d/d\`", \`"lte\`": \`"now/d\`"}}}}}}" --type=data
+
+### flatfile-to-server
+
+elasticdump --input=./data/mapping.json --output=https://elastic:elastic.1@es01:9200/sda_test2 --type=mapping --tlsAuth --output-ca=./ca.crt
+elasticdump --input=./data/data.json --output=https://elastic:elastic.1@localhost:9200/sda_test2 --type=data --tlsAuth --output-ca=./ca.crt

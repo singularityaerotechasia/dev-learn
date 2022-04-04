@@ -1,0 +1,128 @@
+version: "2.2"
+
+services:
+  mysql:
+    image: mysql:5.7
+    command: --max_allowed_packet=32505856 --explicit_defaults_for_timestamp=1
+    environment:
+      MYSQL_USER : ${MYSQL_USER}
+      MYSQL_PASSWORD : ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: "airflow"
+    ports:
+      - 3306:3306
+    networks: 
+      - backend
+    healthcheck:    
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+
+  redis:
+    image: redis:6.2.6-alpine
+    networks:
+        - backend
+    volumes:
+        - ./services/redis/data:/data:rw
+    ports:
+        - "6379:6379"
+    healthcheck:
+        test: [ "CMD", "redis-cli", "ping" ]
+        interval: 2s
+        timeout: 5s
+        retries: 30
+    restart: always
+
+  webserver:
+    build: ./services/airflow
+    entrypoint: ${AIRFLOW_HOME}/entrypoint.sh
+    depends_on:
+      mysql : 
+        condition: service_healthy
+    env_file:
+      - ./airflow.env
+    ports:
+      - 8080:8080
+    volumes:
+      - ./services/airflow/dags:/opt/airflow/dags
+    networks: 
+        - backend
+
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    user: "0"
+    command: >
+      bash -c '
+        if [ x${ELASTIC_PASSWORD} == x ]; then
+          echo "Set the ELASTIC_PASSWORD environment variable in the .env file";
+          exit 1;
+        elif [ x${KIBANA_PASSWORD} == x ]; then
+          echo "Set the KIBANA_PASSWORD environment variable in the .env file";
+          exit 1;
+        fi;
+        echo "Waiting for Elasticsearch availability";
+        until curl -s http://es:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password";
+        until curl -s -X POST -u elastic:${ELASTIC_PASSWORD} -H "Content-Type: application/json" http://es:9200/_security/user/kibana_system/_password -d "{\"password\":\"${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "All done!";
+      '
+    networks: 
+        - backend
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - ${ES_PORT}:9200
+    environment:
+      - node.name=es
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - xpack.security.enabled=true
+      - xpack.license.self_generated.type=${LICENSE}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s http://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks: 
+      - backend
+
+  kibana:
+      depends_on:
+        es:
+          condition: service_healthy
+      image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+      volumes:
+        - kibanadata:/usr/share/kibana/data
+      ports:
+        - ${KIBANA_PORT}:5601
+      environment:
+        - SERVERNAME=kibana
+        - ELASTICSEARCH_HOSTS=http://es:9200
+        - ELASTICSEARCH_USERNAME=kibana_system
+        - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      healthcheck:
+        test:
+          [
+            "CMD-SHELL",
+            "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+          ]
+        interval: 10s
+        timeout: 10s
+        retries: 120
+      networks: 
+        - backend
+
+volumes:
+  esdata:
+    driver: local
+  kibanadata:
+    driver: local
+
+networks:
+  backend:
+    driver: "bridge"

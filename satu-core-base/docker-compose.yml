@@ -39,7 +39,7 @@ services:
       mysql : 
         condition: service_healthy
     env_file:
-      - ./airflow.env
+      - ./services/airflow/airflow.env
     ports:
       - 8080:8080
     volumes:
@@ -89,6 +89,20 @@ services:
       timeout: 10s
       retries: 120
     networks: 
+      - backend
+
+  es_init:
+    depends_on:
+      es:
+        condition: service_healthy
+    image: elasticdump/elasticsearch-dump
+    entrypoint: ./script/script.sh
+    env_file: ./.env
+    volumes:
+      - ./services/elastic/script:/script
+    environment:
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    networks:
       - backend
 
   kibana:

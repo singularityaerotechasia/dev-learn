@@ -11,9 +11,19 @@ docker run --rm -ti --network custom_network elasticdump/elasticsearch-dump --in
 
 elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./data/mapping.json --type=mapping
 
-elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./data/data.json --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"range\`": {\`"alert_at_date\`": {\`"gte\`": \`"now-1d/d\`", \`"lte\`": \`"now/d\`"}}}}}}" --type=data
+elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./es_data/data.json --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"range\`": {\`"alert_at_date\`": {\`"gte\`": \`"now-1d/d\`", \`"lte\`": \`"now/d\`"}}}}}}" --type=data
 
 ### flatfile-to-server
 
 elasticdump --input=./data/mapping.json --output=https://elastic:elastic.1@es01:9200/sda_test2 --type=mapping --tlsAuth --output-ca=./ca.crt
-elasticdump --input=./data/data.json --output=https://elastic:elastic.1@localhost:9200/sda_test2 --type=data --tlsAuth --output-ca=./ca.crt
+elasticdump --input=./services/elastic/data/data.json --output=https://elastic:elastic.1@localhost:9200/sda_test --type=data --tlsAuth --output-ca=./ca.crt
+
+
+### Query for 2nd April 2022
+
+{\`"query\`": {\`"bool\`":{\`"must\`": {\`"match\`": {\`"alert_at_date\`": \`"2022-04-02\`"}}}}}
+elasticdump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=./es_data/data2.json --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"match\`": {\`"alert_at_date\`": \`"2022-04-02\`"}}}}}" --type=data
+
+docker run --rm -ti --network satu-core-base_backend --env NODE_TLS_REJECT_UNAUTHORIZED=0 -v /services/elastic/data:/data  taskrabbit/elasticsearch-dump --input=./data/data.json --output=https://elastic:elastic@es:9200/sda_test --type=data
+
+docker run --rm -ti --network satu-core-base_backend --env NODE_TLS_REJECT_UNAUTHORIZED=0  elasticdump/elasticsearch-dump --input=https://satusystem:sat@sia2021@satu-production.es.ap-southeast-1.aws.found.io:9243/sda_alerts --output=http://elastic:elastic@es:9200/sda_test --searchBody="{\`"query\`": {\`"bool\`":{\`"must\`": {\`"match\`": {\`"alert_at_date\`": \`"2022-04-02\`"}}}}}" --type=data
